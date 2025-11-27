@@ -4,9 +4,10 @@ from rest_framework.response import Response
 from rest_framework import status, viewsets
 from datetime import date, datetime, timedelta
 from django.utils import timezone
-from .models import Doctor, Patient, PillSchedule, PillIntake, PillBoxStatus, Alert
+from .models import Doctor, Patient, PillSchedule, PillIntake, PillBoxStatus, Alert,RefillLog
 from .serializers import (
     DoctorSerializer,
+    RefillLogSerializer,
     LoginSerializer,
     PatientSerializer,
     PillScheduleSerializer,
@@ -50,6 +51,54 @@ class LoginView(APIView):
 # ----------------------------
 # 🧩 CRUD VIEWSETS
 # ----------------------------
+
+
+class RefillLogAPI(APIView):
+    """
+    POST endpoint for IoT or simulator to send pill count and detect refills.
+    Example JSON:
+    {
+        "pill_name": "Paracetamol",
+        "count": 0,
+        "patient_id": 1
+    }
+    """
+
+    def get(self, request):
+        logs = RefillLog.objects.all()
+        serializer = RefillLogSerializer(logs, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        pill_name = request.data.get('pill_name')
+        count = int(request.data.get('count', 0))
+        patient_id = request.data.get('patient_id')
+
+        refill_needed = (count == 0)
+
+        # Save log
+        log = RefillLog.objects.create(
+            pill_name=pill_name,
+            count=count,
+            refill_needed=refill_needed
+        )
+
+        # Create alert if needed
+        if refill_needed and patient_id:
+            try:
+                patient = Patient.objects.get(id=patient_id)
+                Alert.objects.create(
+                    patient=patient,
+                    message=f"Refill needed for {pill_name}",
+                    alert_type="Refill Reminder"
+                )
+            except Patient.DoesNotExist:
+                pass
+
+        serializer = RefillLogSerializer(log)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    
 class DoctorViewSet(viewsets.ModelViewSet):
     queryset = Doctor.objects.all()
     serializer_class = DoctorSerializer

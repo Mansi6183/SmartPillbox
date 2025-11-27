@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
-from .views import VoiceAgentAPI
+from .views import VoiceAgentAPI, RefillLogAPI  # 👈 Added RefillLogAPI import
 
 # ✅ Define router and register all viewsets
 router = DefaultRouter()
@@ -18,5 +18,7 @@ urlpatterns = [
     path('', include(router.urls)),
     path('pill-intake/', views.PillIntakeAPI.as_view(), name='pill-intake'),
     path('refill-status/', views.RefillStatusAPI.as_view(), name='refill-status'),
+    path('refill-log/', RefillLogAPI.as_view(), name='refill-log'),  # 👈 Added new POST endpoint
     path('voice-agent/', VoiceAgentAPI.as_view(), name='voice-agent'),
 ]
+

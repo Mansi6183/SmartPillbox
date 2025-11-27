@@ -4,3 +4,13 @@ djangorestframework==3.16.1
 sqlparse==0.5.3
 typing_extensions==4.15.0
 tzdata==2025.2
+
+# Task Queue
+celery==5.4.0
+redis==5.0.1
+
+# API Documentation
+drf-yasg==1.21.7
+
+# Deployment
+gunicorn==22.0.0
