@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pillbox Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f5f7fa; color: #333; padding: 30px; }
+        h1 { color: #2b6cb0; }
+        .card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Smart Pill Box Dashboard</h1>
+    {% for name, value in feeds.items %}
+        <div class="card">
+            <h3>{{ name }}</h3>
+            <p><strong>Latest Value:</strong> {{ value }}</p>
+        </div>
+    {% endfor %}
+</body>
+</html>
