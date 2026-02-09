@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-15$*$$u_qmwxczof5ajw)l3bss^#%%1co4)1&2$*ffr+=#&a3r
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['smartpillbox.onrender.com', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['smartpillbox-1.onrender.com', 'smartpillbox.onrender.com', 'localhost', '127.0.0.1']
 
 # Application definition
 
