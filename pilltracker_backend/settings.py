@@ -25,7 +25,8 @@ SECRET_KEY = 'django-insecure-15$*$$u_qmwxczof5ajw)l3bss^#%%1co4)1&2$*ffr+=#&a3r
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['smartpillbox-1.onrender.com', 'smartpillbox.onrender.com', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['*']
+
 
 # Application definition
 
@@ -36,16 +37,19 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+      
 
     # Third-party
     'rest_framework',
-
+ 'corsheaders', 
     # Local
     'api',
+      'django_extensions',
 ]
 
 
 MIDDLEWARE = [
+       'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -82,8 +86,12 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {
+            'timeout': 20,  # seconds
+        }
     }
 }
+
 
 
 # Password validation
@@ -135,3 +143,4 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Kolkata'
 CELERYD_POOL = 'solo'
 
+CORS_ALLOW_ALL_ORIGINS = True  # ← allows frontend to access API

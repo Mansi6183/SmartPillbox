@@ -24,6 +24,7 @@ urlpatterns = [
     path('voice-agent/', VoiceAgentAPI.as_view(), name='voice-agent'),
     path('patients/<int:pk>/', PatientDeleteView.as_view(), name='delete-patient'),
     path('dispense/', views.dispense, name='dispense'),
+
     path("schedule/", MQTTScheduleAPI.as_view(), name="mqtt-schedule"),
 
     
