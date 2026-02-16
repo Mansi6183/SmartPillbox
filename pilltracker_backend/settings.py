@@ -20,8 +20,11 @@ SECRET_KEY = 'django-insecure-15$*$$u_qmwxczof5ajw)l3bss^#%%1co4)1&2$*ffr+=#&a3r
 DEBUG = False
 
 # Replace the first host with your actual Render URL after deployment
-ALLOWED_HOSTS = ['pilltracker-backend.onrender.com', '127.0.0.1', 'localhost']
-
+ALLOWED_HOSTS = [
+    'smartpillbox-1.onrender.com',
+    'localhost',
+    '127.0.0.1',
+]
 # -------------------------------------------------------------------
 # APPLICATIONS
 # -------------------------------------------------------------------
