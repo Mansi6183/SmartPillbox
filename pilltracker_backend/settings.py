@@ -25,6 +25,7 @@ ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
 ]
+
 # -------------------------------------------------------------------
 # APPLICATIONS
 # -------------------------------------------------------------------
@@ -60,6 +61,26 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+# -------------------------------------------------------------------
+# TEMPLATES (required for admin + error pages)
+# -------------------------------------------------------------------
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [BASE_DIR / "templates"],  # Optional: create a /templates folder if needed
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
 ]
 
 # -------------------------------------------------------------------
@@ -110,7 +131,6 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Ensure static files are served in production
 if not DEBUG:
     STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
@@ -130,7 +150,6 @@ CORS_ALLOW_ALL_ORIGINS = True
 # CELERY CONFIGURATION (disabled for Render free plan)
 # -------------------------------------------------------------------
 
-# If you plan to use Celery later, uncomment these and set up Redis on Render
 # CELERY_BROKER_URL = 'redis://localhost:6379/0'
 # CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 # CELERY_ACCEPT_CONTENT = ['json']
