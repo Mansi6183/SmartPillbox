@@ -81,35 +81,34 @@ def dispense(request):
     """
     POST → JSON {"hour":14,"minute":30,"motor":1,"dose":2}
     GET → query params ?motor=1&dose=2 (instant rotation)
-    Publishes → MQTT topic pillbox/schedule as "HH:MM,Mx,D"
+    Publishes → MQTT topic pillbox/schedule as JSON
     """
     try:
         if request.method == "POST":
             data = json.loads(request.body)
             hour = int(data.get("hour", 0))
             minute = int(data.get("minute", 0))
-            motor = int(data.get("motor", 1))
+            motor = int(data.get("motor", 0))
             dose = int(data.get("dose", 1))
 
         elif request.method == "GET":
             motor = int(request.GET.get("motor", 1))
             dose = int(request.GET.get("dose", 1))
-            hour, minute = 0, 0  # immediate execution
+            hour, minute = 0, 0  # immediate dispense
 
         else:
             return JsonResponse({"error": "Only GET or POST allowed"}, status=405)
 
-        import json
-mqtt_message = json.dumps({
-    "hour": hour,
-    "minute": minute,
-    "motor": motor,
-    "dose": dose
-})
+        # ✅ Publish JSON to MQTT
+        mqtt_message = json.dumps({
+            "hour": hour,
+            "minute": minute,
+            "motor": motor,
+            "dose": dose
+        })
 
         mqtt_topic = "pillbox/schedule"
         broker = "broker.hivemq.com"
-
         client = mqtt.Client()
         client.connect(broker, 1883, 60)
         client.publish(mqtt_topic, mqtt_message)
@@ -128,6 +127,7 @@ mqtt_message = json.dumps({
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
 
 # ----------------------------
 # 🧩 REFILL LOG API
