@@ -99,7 +99,14 @@ def dispense(request):
         else:
             return JsonResponse({"error": "Only GET or POST allowed"}, status=405)
 
-        mqtt_message = f"{hour:02d}:{minute:02d},M{motor},{dose}"
+        import json
+mqtt_message = json.dumps({
+    "hour": hour,
+    "minute": minute,
+    "motor": motor,
+    "dose": dose
+})
+
         mqtt_topic = "pillbox/schedule"
         broker = "broker.hivemq.com"
 
