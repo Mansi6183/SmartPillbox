@@ -73,36 +73,36 @@ class LoginView(APIView):
 # 💊 DISPENSE API (GET + POST)
 # ----------------------------
 @csrf_exempt
+# ----------------------------
+# 💊 DISPENSE API (GET + POST)
+# ----------------------------
+@csrf_exempt
 def dispense(request):
     """
     POST → JSON {"hour":14,"minute":30,"motor":1,"dose":2}
+    GET → query params ?motor=1&dose=2 (instant rotation)
     Publishes → MQTT topic pillbox/schedule as "HH:MM,Mx,D"
     """
-    if request.method != "POST":
-        return JsonResponse({"error": "Only POST allowed"}, status=405)
-
     try:
-        data = json.loads(request.body)
-        hour = data.get("hour")
-        minute = data.get("minute")
-        motor = data.get("motor")
-        dose = data.get("dose")
+        if request.method == "POST":
+            data = json.loads(request.body)
+            hour = int(data.get("hour", 0))
+            minute = int(data.get("minute", 0))
+            motor = int(data.get("motor", 1))
+            dose = int(data.get("dose", 1))
 
-        # Validate input
-        if None in [hour, minute, motor, dose]:
-            return JsonResponse({"error": "hour, minute, motor, or dose not specified"}, status=400)
+        elif request.method == "GET":
+            motor = int(request.GET.get("motor", 1))
+            dose = int(request.GET.get("dose", 1))
+            hour, minute = 0, 0  # immediate execution
 
-        hour = int(hour)
-        minute = int(minute)
-        motor = int(motor)
-        dose = int(dose)
+        else:
+            return JsonResponse({"error": "Only GET or POST allowed"}, status=405)
 
-        # Format MQTT message
         mqtt_message = f"{hour:02d}:{minute:02d},M{motor},{dose}"
         mqtt_topic = "pillbox/schedule"
-
-        # Publish to MQTT broker
         broker = "broker.hivemq.com"
+
         client = mqtt.Client()
         client.connect(broker, 1883, 60)
         client.publish(mqtt_topic, mqtt_message)
@@ -111,7 +111,7 @@ def dispense(request):
         print(f"📡 MQTT → {mqtt_topic}: {mqtt_message}")
 
         return JsonResponse({
-            "status": "Motor scheduled via MQTT",
+            "status": "Motor activated via MQTT",
             "motor": motor,
             "dose": dose,
             "time": f"{hour:02d}:{minute:02d}",
@@ -121,6 +121,7 @@ def dispense(request):
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
 # ----------------------------
 # 🧩 REFILL LOG API
 # ----------------------------

@@ -76,16 +76,16 @@ class LoginView(APIView):
 def dispense(request):
     """
     POST → JSON {"hour":14,"minute":30,"motor":1,"dose":2}
-    GET → query params ?motor=1&dose=2 (instant rotation)
+    GET  → query params ?motor=1&dose=2 (instant rotation)
     Publishes → MQTT topic pillbox/schedule as "HH:MM,Mx,D"
     """
     try:
         if request.method == "POST":
             data = json.loads(request.body)
-            hour = int(data.get("hour"))
-            minute = int(data.get("minute"))
-            motor = int(data.get("motor"))
-            dose = int(data.get("dose"))
+            hour = int(data.get("hour", 0))
+            minute = int(data.get("minute", 0))
+            motor = int(data.get("motor", 1))
+            dose = int(data.get("dose", 1))
 
         elif request.method == "GET":
             motor = int(request.GET.get("motor", 1))
@@ -98,6 +98,7 @@ def dispense(request):
         mqtt_message = f"{hour:02d}:{minute:02d},M{motor},{dose}"
         mqtt_topic = "pillbox/schedule"
         broker = "broker.hivemq.com"
+
         client = mqtt.Client()
         client.connect(broker, 1883, 60)
         client.publish(mqtt_topic, mqtt_message)
@@ -116,6 +117,7 @@ def dispense(request):
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
 # ----------------------------
 # 🧩 REFILL LOG API
 # ----------------------------
