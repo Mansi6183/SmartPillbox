@@ -5,6 +5,7 @@ from rest_framework import generics, viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
+from rest_framework.decorators import action
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
@@ -72,56 +73,54 @@ class LoginView(APIView):
 # ----------------------------
 # 💊 DISPENSE API (GET + POST)
 # ----------------------------
-@csrf_exempt
-def dispense(request):
+class DispenseViewSet(viewsets.ViewSet):
     """
-    POST → JSON {"hour":14,"minute":30,"motor":1,"dose":2}
-    GET  → query params ?motor=1&dose=2 (instant rotation)
-    Publishes → MQTT topic pillbox/schedule as "HH:MM,Mx,D"
+    ViewSet for medicine dispensing via MQTT.
+    Shows up in API Root and can be triggered through:
+      POST /api/dispense/trigger/
+      GET  /api/dispense/trigger/?motor=1&dose=2
     """
-    try:
-        if request.method == "POST":
-            data = json.loads(request.body)
-            hour = int(data.get("hour", 0))
-            minute = int(data.get("minute", 0))
-            motor = int(data.get("motor", 1))
-            dose = int(data.get("dose", 1))
+    @action(detail=False, methods=['get', 'post'])
+    def trigger(self, request):
+        try:
+            if request.method == "POST":
+                hour = int(request.data.get("hour", 0))
+                minute = int(request.data.get("minute", 0))
+                motor = int(request.data.get("motor", 1))
+                dose = int(request.data.get("dose", 1))
+            else:
+                motor = int(request.GET.get("motor", 1))
+                dose = int(request.GET.get("dose", 1))
+                hour, minute = 0, 0
 
-        elif request.method == "GET":
-            motor = int(request.GET.get("motor", 1))
-            dose = int(request.GET.get("dose", 1))
-            hour, minute = 0, 0  # immediate execution
+            mqtt_message = json.dumps({
+                "hour": hour,
+                "minute": minute,
+                "motor": motor,
+                "dose": dose
+            })
 
-        else:
-            return JsonResponse({"error": "Only GET or POST allowed"}, status=405)
-        import json
-        mqtt_message = json.dumps({
-    "hour": hour,
-    "minute": minute,
-    "motor": motor,
-    "dose": dose
-})
-        mqtt_topic = "pillbox/schedule"
-        broker = "broker.hivemq.com"
+            mqtt_topic = "pillbox/schedule"
+            broker = "broker.hivemq.com"
 
-        client = mqtt.Client()
-        client.connect(broker, 1883, 60)
-        client.publish(mqtt_topic, mqtt_message)
-        client.disconnect()
+            client = mqtt.Client()
+            client.connect(broker, 1883, 60)
+            client.publish(mqtt_topic, mqtt_message)
+            client.disconnect()
 
-        print(f"📡 MQTT → {mqtt_topic}: {mqtt_message}")
+            print(f"📡 MQTT → {mqtt_topic}: {mqtt_message}")
 
-        return JsonResponse({
-            "status": "Motor activated via MQTT",
-            "motor": motor,
-            "dose": dose,
-            "time": f"{hour:02d}:{minute:02d}",
-            "mqtt_message": mqtt_message,
-            "topic": mqtt_topic
-        })
+            return Response({
+                "status": "Motor activated via MQTT",
+                "motor": motor,
+                "dose": dose,
+                "time": f"{hour:02d}:{minute:02d}",
+                "mqtt_message": mqtt_message,
+                "topic": mqtt_topic
+            })
 
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # ----------------------------
 # 🧩 REFILL LOG API

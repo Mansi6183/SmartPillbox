@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
-from .views import VoiceAgentAPI, RefillLogAPI ,PatientDeleteView, MQTTScheduleAPI # 👈 Added RefillLogAPI import
+from .views import VoiceAgentAPI, RefillLogAPI, PatientDeleteView, MQTTScheduleAPI
 
 # ✅ Define router and register all viewsets
 router = DefaultRouter()
@@ -12,7 +12,7 @@ router.register(r'intakes', views.PillIntakeViewSet)
 router.register(r'pillbox', views.PillBoxStatusViewSet)
 router.register(r'alerts', views.AlertViewSet)
 router.register(r'medications', views.MedicationViewSet)
-
+router.register(r'dispense', views.DispenseViewSet, basename='dispense')  # ✅ keep this one only
 
 # ✅ Define urlpatterns (single list only)
 urlpatterns = [
@@ -20,14 +20,9 @@ urlpatterns = [
     path('', include(router.urls)),
     path('pill-intake/', views.PillIntakeAPI.as_view(), name='pill-intake'),
     path('refill-status/', views.RefillStatusAPI.as_view(), name='refill-status'),
-    path('refill-log/', RefillLogAPI.as_view(), name='refill-log'),  # 👈 Added new POST endpoint
+    path('refill-log/', RefillLogAPI.as_view(), name='refill-log'),
     path('voice-agent/', VoiceAgentAPI.as_view(), name='voice-agent'),
     path('patients/<int:pk>/', PatientDeleteView.as_view(), name='delete-patient'),
-    path('dispense/', views.dispense, name='dispense'),
-
-    path("schedule/", MQTTScheduleAPI.as_view(), name="mqtt-schedule"),
-
-    
-
+    # ❌ remove old path('dispense/', views.dispense, name='dispense'),
+    path('schedule/', MQTTScheduleAPI.as_view(), name='mqtt-schedule'),
 ]
-
