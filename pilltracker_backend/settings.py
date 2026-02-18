@@ -145,6 +145,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # -------------------------------------------------------------------
 
 CORS_ALLOW_ALL_ORIGINS = True
+# -------------------------------------------------------------------
+# LOGIN REDIRECT SETTINGS
+# -------------------------------------------------------------------
+
+LOGIN_REDIRECT_URL = '/api/'        # ✅ redirect to API root after login
+LOGOUT_REDIRECT_URL = '/api-auth/login/'  # optional: after logout, go back to login page
+
 
 # -------------------------------------------------------------------
 # CELERY CONFIGURATION (disabled for Render free plan)
