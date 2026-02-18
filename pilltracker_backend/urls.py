@@ -24,4 +24,5 @@ urlpatterns = [
     path('api/', include('api.urls')),    # ✅ correct app name
   # 👈 include your app routes here
     path('', lambda request: HttpResponse("✅ Django Backend Running Successfully")),
+    path('api-auth/', include('rest_framework.urls')), 
 ]
