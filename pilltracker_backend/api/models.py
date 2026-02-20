@@ -128,4 +128,12 @@ class Medication(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.patient.name})"
+    
+class Dispense(models.Model):
+    pill_name = models.CharField(max_length=100)
+    compartment = models.IntegerField()
+    time_dispensed = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.pill_name} - Compartment {self.compartment}"
 

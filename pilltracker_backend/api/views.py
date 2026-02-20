@@ -76,11 +76,24 @@ class LoginView(APIView):
 class DispenseViewSet(viewsets.ViewSet):
     """
     ViewSet for medicine dispensing via MQTT.
-    Shows up in API Root and can be triggered through:
+    Appears in API Root and supports:
+      GET  /api/dispense/
       POST /api/dispense/trigger/
       GET  /api/dispense/trigger/?motor=1&dose=2
     """
-    @action(detail=False, methods=['get', 'post'])
+
+    # ✅ This ensures /api/dispense/ appears in API Root
+    def list(self, request):
+        return Response({
+            "message": "Dispense API available",
+            "usage": {
+                "GET": "/api/dispense/trigger/?motor=1&dose=2",
+                "POST": "/api/dispense/trigger/"
+            }
+        })
+
+    # ✅ Trigger endpoint
+    @action(detail=False, methods=['get', 'post'], url_path='trigger')
     def trigger(self, request):
         try:
             if request.method == "POST":
@@ -121,7 +134,6 @@ class DispenseViewSet(viewsets.ViewSet):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 # ----------------------------
 # 🧩 REFILL LOG API
 # ----------------------------
@@ -166,42 +178,66 @@ class RefillLogAPI(APIView):
 # ----------------------------
 # 📡 MQTT SCHEDULE API
 # ----------------------------
+# ----------------------------
+# 📡 MQTT SCHEDULE API (Updated for ESP32 JSON)
+# ----------------------------
 class MQTTScheduleAPI(APIView):
     """
     POST /api/schedule/
-    Body → {"time": "15:30", "motor": 1, "dose": 2}
-    Publishes → pillbox/schedule topic as "15:30,M1,2"
+    Body → {"time": "08:14:18", "motor": 1, "dose": 2}
+    Publishes JSON → {"hour":8,"minute":14,"motor":1,"dose":2}
+    Topic → pillbox/schedule
     """
     permission_classes = [AllowAny]
 
     def post(self, request):
         try:
+            # Get values from request
             time_str = request.data.get("time")
             motor = int(request.data.get("motor", 0))
             dose = int(request.data.get("dose", 0))
 
-            if not time_str or motor not in [1,2,3] or dose <= 0:
+            # Validate inputs
+            if not time_str or motor not in [0, 1, 2] or dose <= 0:
                 return Response(
-                    {"error": "Invalid input. Example: {'time':'15:30','motor':1,'dose':2}"},
+                    {"error": "Invalid input. Example: {'time':'08:14:18','motor':1,'dose':2}"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            # Parse hour and minute from time string
+            try:
+                hour, minute, _ = map(int, time_str.split(":"))
+            except ValueError:
+                return Response({"error": "Time format must be HH:MM:SS"}, status=400)
+
+            # Prepare MQTT JSON payload
+            payload = {
+                "hour": hour,
+                "minute": minute,
+                "motor": motor,
+                "dose": dose
+            }
+
             broker = "broker.hivemq.com"
             topic = "pillbox/schedule"
-            message = f"{time_str},M{motor},{dose}"
 
-            client = mqtt.Client()
+            # Publish via MQTT
+            client = mqtt.Client("RenderScheduler")
             client.connect(broker, 1883, 60)
-            client.publish(topic, message)
+            client.publish(topic, json.dumps(payload))
             client.disconnect()
 
-            print(f"📡 MQTT → {topic}: {message}")
+            print(f"✅ MQTT → {topic}: {payload}")
 
-            return Response({"message": "Schedule sent successfully","topic": topic,"payload": message}, status=200)
+            return Response({
+                "message": "Schedule sent successfully",
+                "topic": topic,
+                "payload": payload
+            }, status=200)
 
         except Exception as e:
+            print("❌ MQTT Schedule Error:", str(e))
             return Response({"error": str(e)}, status=500)
-
 
 # ----------------------------
 # 👨‍⚕️ DOCTOR VIEWSET
@@ -232,9 +268,53 @@ class PatientViewSet(viewsets.ModelViewSet):
 # ----------------------------
 # 💊 CRUD VIEWSETS
 # ----------------------------
+# ----------------------------
+# 💊 PILL SCHEDULE VIEWSET (Auto MQTT Publish)
+# ----------------------------
 class PillScheduleViewSet(viewsets.ModelViewSet):
     queryset = PillSchedule.objects.all()
     serializer_class = PillScheduleSerializer
+    permission_classes = [AllowAny]
+
+    def perform_create(self, serializer):
+        # 1️⃣ Save the new schedule to database
+        schedule = serializer.save()
+
+        # 2️⃣ Extract time, dosage, and (optional) motor info
+        time_str = str(schedule.time)
+        dosage = int(schedule.dosage) if schedule.dosage else 1
+        motor = 1  # Default motor slot; you can map based on pill name if needed
+
+        # 3️⃣ Parse "HH:MM:SS" → hour/minute
+        try:
+            hour, minute, _ = map(int, time_str.split(":"))
+        except ValueError:
+            print("⚠️ Invalid time format in schedule:", time_str)
+            return
+
+        # 4️⃣ Prepare MQTT JSON payload (for ESP32)
+        payload = {
+            "hour": hour,
+            "minute": minute,
+            "motor": motor,
+            "dose": dosage
+        }
+
+        # 5️⃣ Publish via MQTT (to match ESP32 topic)
+        try:
+            broker = "broker.hivemq.com"
+            topic = "pillbox/schedule"
+
+            client = mqtt.Client("RenderAutoScheduler")
+            client.connect(broker, 1883, 60)
+            client.publish(topic, json.dumps(payload))
+            client.disconnect()
+
+            print(f"✅ Auto-MQTT Sent → {topic}: {payload}")
+
+        except Exception as e:
+            print("❌ MQTT Auto Publish Error:", str(e))
+
 
 class PillIntakeViewSet(viewsets.ModelViewSet):
     queryset = PillIntake.objects.all()

@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
-from .views import VoiceAgentAPI, RefillLogAPI, PatientDeleteView, MQTTScheduleAPI
+from .views import VoiceAgentAPI, RefillLogAPI, PatientDeleteView, MQTTScheduleAPI,  DispenseViewSet
 
 # ✅ Define router and register all viewsets
 router = DefaultRouter()
@@ -12,7 +12,7 @@ router.register(r'intakes', views.PillIntakeViewSet)
 router.register(r'pillbox', views.PillBoxStatusViewSet)
 router.register(r'alerts', views.AlertViewSet)
 router.register(r'medications', views.MedicationViewSet)
-router.register(r'dispense', views.DispenseViewSet, basename='dispense')  # ✅ keep this one only
+router.register(r'dispense', DispenseViewSet, basename='dispense')  # ✅ keep this one only
 
 # ✅ Define urlpatterns (single list only)
 urlpatterns = [

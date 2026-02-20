@@ -7,7 +7,7 @@ from .models import (
     PillBoxStatus,
     Alert,
     RefillLog,
-    Medication
+    Medication,Dispense
 )
 
 # ----------------------------
@@ -143,4 +143,9 @@ class RefillLogSerializer(serializers.ModelSerializer):
 class MedicationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Medication
+        fields = '__all__'
+
+class DispenseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Dispense
         fields = '__all__'
