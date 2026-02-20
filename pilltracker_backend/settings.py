@@ -44,7 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
        # ✅ Add this line
-     'pilltracker_backend.api',  # ✅ FULL path to the app
+     'pilltracker_backend.api',  # ✅ full Python path # ✅ FULL path to the app
     # Third-party apps
     'rest_framework',
     'corsheaders',
