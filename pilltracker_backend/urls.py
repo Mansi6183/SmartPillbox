@@ -21,7 +21,7 @@ from django.http import HttpResponse
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    p path('api/', include('pilltracker_backend.api.urls')),    # ✅ correct app name
+    path('api/', include('api.urls')),    # ✅ correct app name
   # 👈 include your app routes here
     path('', lambda request: HttpResponse("✅ Django Backend Running Successfully")),
     path('api-auth/', include('rest_framework.urls')), 
