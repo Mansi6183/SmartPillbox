@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'pilltracker_backend.api',   # ✅ Add this line
 
     # Third-party apps
     'rest_framework',
@@ -50,7 +51,7 @@ INSTALLED_APPS = [
     'django_extensions',
 
     # Local apps
-    'api',
+    
 ]
 
 # -------------------------------------------------------------------
