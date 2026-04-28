@@ -106,6 +106,9 @@ class Alert(models.Model):
     def __str__(self):
         return f"{self.alert_type} - {self.patient.name}"
 
+
+
+
 class RefillLog(models.Model):
     pill_name = models.CharField(max_length=100)
     count = models.IntegerField()

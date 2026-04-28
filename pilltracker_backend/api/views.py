@@ -9,6 +9,8 @@ from rest_framework.decorators import action
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
+from .utils import auto_generate_all_alerts
+
 import json
 import uuid
 import paho.mqtt.client as mqtt
@@ -325,9 +327,14 @@ class PillBoxStatusViewSet(viewsets.ModelViewSet):
     serializer_class = PillBoxStatusSerializer
 
 class AlertViewSet(viewsets.ModelViewSet):
-    queryset = Alert.objects.all()
+    queryset = Alert.objects.all().order_by('-created_at')
     serializer_class = AlertSerializer
 
+    def list(self, request, *args, **kwargs):
+        auto_generate_all_alerts()   # 🔥 THIS LINE IS MISSING IN YOUR PROJECT
+        return super().list(request, *args, **kwargs)
+
+  
 class MedicationViewSet(viewsets.ModelViewSet):
     queryset = Medication.objects.all()
     serializer_class = MedicationSerializer

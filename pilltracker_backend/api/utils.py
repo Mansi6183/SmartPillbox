@@ -1,6 +1,48 @@
 
 import requests
 from django.conf import settings
+from django.utils import timezone
+from .models import PillSchedule, PillIntake, Alert
+def auto_generate_all_alerts():
+    auto_generate_missed_alerts()
+    check_late_intake()
+    check_refill()
+    now = timezone.localtime()
+    today = now.date()
+
+    schedules = PillSchedule.objects.all()
+
+    for schedule in schedules:
+        scheduled_time = timezone.make_aware(
+            timezone.datetime.combine(today, schedule.time)
+        )
+
+        # Check if already taken
+        intake = PillIntake.objects.filter(
+            schedule=schedule,
+            date=today,
+            taken=True
+        ).exists()
+
+        # If time passed & not taken → MISSED
+        if now > scheduled_time and not intake:
+
+            # Prevent duplicate alerts
+            already_exists = Alert.objects.filter(
+                patient=schedule.patient,
+                alert_type="Missed Dose",
+                created_at__date=today,
+                message__icontains=schedule.pill_name
+            ).exists()
+
+            if not already_exists:
+                Alert.objects.create(
+                    patient=schedule.patient,
+                    message=f"Patient missed {schedule.pill_name} dose at {schedule.time.strftime('%H:%M')}",
+                    alert_type="Missed Dose"
+                )
+
+
 
 def get_latest_feed_value(feed_name):
     """

@@ -14,3 +14,4 @@ staticfiles/
 # OS files
 .DS_Store
 
+androidstudio/
