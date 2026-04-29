@@ -100,30 +100,26 @@ def dispense(request):
             return JsonResponse({"error": "Only GET or POST allowed"}, status=405)
 
         # ✅ Publish JSON to MQTT
-        mqtt_message = json.dumps({
-            "hour": hour,
-            "minute": minute,
-            "motor": motor,
-            "dose": dose
-        })
+        # ✅ Publish SIMPLE STRING (ESP compatible)
+        msg = f"{hour},{minute},{motor},{dose}"
 
-        mqtt_topic = "pillbox/schedule"
-        broker = "broker.hivemq.com"
+        mqtt_topic = "pillbox/cmd"
+
         client = mqtt.Client()
         client.connect(broker, 1883, 60)
-        client.publish(mqtt_topic, mqtt_message)
+        client.publish(mqtt_topic, msg)
         client.disconnect()
 
-        print(f"📡 MQTT → {mqtt_topic}: {mqtt_message}")
+        print(f"📡 MQTT → {mqtt_topic}: {msg}")
 
-        return JsonResponse({
-            "status": "Motor activated via MQTT",
-            "motor": motor,
-            "dose": dose,
-            "time": f"{hour:02d}:{minute:02d}",
-            "mqtt_message": mqtt_message,
-            "topic": mqtt_topic
-        })
+return JsonResponse({
+    "status": "Motor activated via MQTT",
+    "motor": motor,
+    "dose": dose,
+    "time": f"{hour:02d}:{minute:02d}",
+    "mqtt_message": msg,
+    "topic": mqtt_topic
+})
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -174,11 +170,6 @@ class RefillLogAPI(APIView):
 # 📡 MQTT SCHEDULE API
 # ----------------------------
 class MQTTScheduleAPI(APIView):
-    """
-    POST /api/schedule/
-    Body → {"time": "15:30", "motor": 1, "dose": 2}
-    Publishes → pillbox/schedule topic as "15:30,M1,2"
-    """
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -193,18 +184,28 @@ class MQTTScheduleAPI(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            broker = "broker.hivemq.com"
-            topic = "pillbox/schedule"
-            message = f"{time_str},M{motor},{dose}"
+            # ✅ Convert time
+            hour, minute = map(int, time_str.split(":"))
 
-            client = mqtt.Client()
-            client.connect(broker, 1883, 60)
-            client.publish(topic, message)
+            broker = "broker.hivemq.com"
+            topic = "pillbox/cmd"
+
+            # ✅ Correct format for ESP
+            message = f"{hour},{minute},{motor},{dose}"
+
+            client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1)
+            client.connect("broker.hivemq.com", 1883, 60)
+            client.publish("pillbox/cmd", message)
             client.disconnect()
 
             print(f"📡 MQTT → {topic}: {message}")
 
-            return Response({"message": "Schedule sent successfully","topic": topic,"payload": message}, status=200)
+            # ✅ ADD THIS
+            return Response({
+                "status": "Schedule sent successfully",
+                "topic": topic,
+                "payload": message
+            }, status=200)
 
         except Exception as e:
             return Response({"error": str(e)}, status=500)
