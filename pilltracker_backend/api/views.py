@@ -78,64 +78,132 @@ class LoginView(APIView):
 class DispenseViewSet(viewsets.ViewSet):
     """
     ViewSet for medicine dispensing via MQTT.
-    Appears in API Root and supports:
-      GET  /api/dispense/
-      POST /api/dispense/trigger/
-      GET  /api/dispense/trigger/?motor=1&dose=2
+
+    Examples:
+
+    GET:
+    /api/dispense/trigger/?hour=14&minute=30&motor=1&dose=1
+
+    POST:
+    {
+        "hour": 14,
+        "minute": 30,
+        "motor": 1,
+        "dose": 1
+    }
     """
 
-    # ✅ This ensures /api/dispense/ appears in API Root
+    # API root display
     def list(self, request):
         return Response({
             "message": "Dispense API available",
             "usage": {
-                "GET": "/api/dispense/trigger/?motor=1&dose=2",
+                "GET": "/api/dispense/trigger/?hour=14&minute=30&motor=1&dose=1",
                 "POST": "/api/dispense/trigger/"
             }
         })
 
-    # ✅ Trigger endpoint
+    # Trigger endpoint
     @action(detail=False, methods=['get', 'post'], url_path='trigger')
     def trigger(self, request):
+
         try:
-            if request.method == "POST":
+
+            # ==========================
+            # GET REQUEST
+            # ==========================
+            if request.method == "GET":
+
+                hour = int(request.GET.get("hour", 0))
+                minute = int(request.GET.get("minute", 0))
+                motor = int(request.GET.get("motor", 1))
+                dose = int(request.GET.get("dose", 1))
+
+            # ==========================
+            # POST REQUEST
+            # ==========================
+            else:
+
                 hour = int(request.data.get("hour", 0))
                 minute = int(request.data.get("minute", 0))
                 motor = int(request.data.get("motor", 1))
                 dose = int(request.data.get("dose", 1))
-            else:
-                motor = int(request.GET.get("motor", 1))
-                dose = int(request.GET.get("dose", 1))
-                hour, minute = 0, 0
 
-            mqtt_message = json.dumps({
+            # ==========================
+            # VALIDATION
+            # ==========================
+            if hour < 0 or hour > 23:
+                return Response(
+                    {"error": "Hour must be between 0 and 23"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if minute < 0 or minute > 59:
+                return Response(
+                    {"error": "Minute must be between 0 and 59"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if motor not in [1, 2, 3]:
+                return Response(
+                    {"error": "Motor must be 1, 2, or 3"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if dose <= 0:
+                return Response(
+                    {"error": "Dose must be greater than 0"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # ==========================
+            # MQTT PAYLOAD
+            # ==========================
+            payload = {
                 "hour": hour,
                 "minute": minute,
                 "motor": motor,
                 "dose": dose
-            })
+            }
 
-            mqtt_topic = "pillbox/schedule"
+            mqtt_message = json.dumps(payload)
+
             broker = "broker.hivemq.com"
+            topic = "pillbox/schedule"
 
-            client = mqtt.Client()
+            # ==========================
+            # MQTT PUBLISH
+            # ==========================
+            client = mqtt.Client("DjangoScheduler")
+
             client.connect(broker, 1883, 60)
-            client.publish(mqtt_topic, mqtt_message)
+
+            client.publish(topic, mqtt_message)
+
             client.disconnect()
 
-            print(f"📡 MQTT → {mqtt_topic}: {mqtt_message}")
+            print(f"📡 MQTT SENT → {topic}: {mqtt_message}")
 
+            # ==========================
+            # RESPONSE
+            # ==========================
             return Response({
-                "status": "Motor activated via MQTT",
+                "status": "Schedule sent successfully",
+                "scheduled_time": f"{hour:02d}:{minute:02d}",
                 "motor": motor,
                 "dose": dose,
-                "time": f"{hour:02d}:{minute:02d}",
-                "mqtt_message": mqtt_message,
-                "topic": mqtt_topic
+                "mqtt_topic": topic,
+                "mqtt_message": payload
             })
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            print("❌ MQTT ERROR:", str(e))
+
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 # ----------------------------
 # 🧩 REFILL LOG API
 # ----------------------------
@@ -447,3 +515,64 @@ class VoiceAgentAPI(APIView):
             response_text = "You missed your pill today." if missed.exists() else "Great! You didn’t miss any pill today."
 
         return Response({"fulfillmentText": response_text})
+    
+
+    from rest_framework.decorators import api_view
+from datetime import date
+
+
+@api_view(['POST'])
+def save_schedule(request):
+
+    try:
+
+        data = request.data
+
+        hour = data.get("hour")
+        minute = data.get("minute")
+        motor = data.get("motor")
+
+        time_value = f"{hour}:{minute}:00"
+
+        # Get first patient
+        patient = Patient.objects.first()
+
+        if not patient:
+            return Response({
+                "error": "No patient found"
+            }, status=400)
+
+        # Save medication schedule
+        medication = Medication.objects.create(
+
+            patient=patient,
+
+            name=f"Motor {motor} Medicine",
+
+            dosage="1",
+
+            time=time_value,
+
+            compartment=int(motor),
+
+            frequency="Daily",
+
+            start_date=date.today()
+        )
+
+        return Response({
+
+            "message": "Schedule saved successfully",
+
+            "id": medication.id,
+
+            "time": time_value,
+
+            "motor": motor
+        })
+
+    except Exception as e:
+
+        return Response({
+            "error": str(e)
+        }, status=500)

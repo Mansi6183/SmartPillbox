@@ -19,7 +19,6 @@ SECRET_KEY = 'django-insecure-15$*$$u_qmwxczof5ajw)l3bss^#%%1co4)1&2$*ffr+=#&a3r
 
 # ⚠️ In production (Render), keep this False
 DEBUG = False
-
 ALLOWED_HOSTS = [
     'smartpillbox-1.onrender.com',  # ✅ your Render app domain
     'localhost',
@@ -36,6 +35,7 @@ CSRF_TRUSTED_ORIGINS = [
 # -------------------------------------------------------------------
 
 INSTALLED_APPS = [
+
     # Django built-ins
     'django.contrib.admin',
     'django.contrib.auth',
@@ -43,16 +43,20 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-       # ✅ Add this line
-     'pilltracker_backend.api',  # ✅ full Python path # ✅ FULL path to the app
+
     # Third-party apps
     'rest_framework',
     'corsheaders',
     'django_extensions',
 
     # Local apps
-    
+    'pilltracker_backend.api',
+
 ]
+
+    # Local apps
+    
+
 
 # -------------------------------------------------------------------
 # MIDDLEWARE
@@ -149,12 +153,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # -------------------------------------------------------------------
 
 CORS_ALLOW_CREDENTIALS = True
-
-CORS_ALLOWED_ORIGINS = [
-    "http://127.0.0.1:5500",
-    "http://localhost:5500",
-]
-
+CORS_ALLOW_ALL_ORIGINS = True
 # -------------------------------------------------------------------
 # LOGIN / LOGOUT REDIRECT SETTINGS
 # -------------------------------------------------------------------
@@ -175,7 +174,10 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.BasicAuthentication',
     ],
 }
+RUN_MAIN = os.environ.get('RUN_MAIN')
 
+if RUN_MAIN != 'true':
+    APSCHEDULER_RUN = False
 # -------------------------------------------------------------------
 # CELERY CONFIGURATION (disabled for Render free plan)
 # -------------------------------------------------------------------
