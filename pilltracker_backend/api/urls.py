@@ -1,7 +1,9 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
-from .views import VoiceAgentAPI, RefillLogAPI, PatientDeleteView, MQTTScheduleAPI, DispenseViewSet
+from .views import VoiceAgentAPI, RefillLogAPI, PatientDeleteView, MQTTScheduleAPI, DispenseViewSet,save_schedule
+
+
 
 # Router for viewsets
 router = DefaultRouter()
@@ -24,5 +26,5 @@ urlpatterns = [
     path('voice-agent/', VoiceAgentAPI.as_view(), name='voice-agent'),
     path('patients/<int:pk>/', PatientDeleteView.as_view(), name='delete-patient'),
     path('schedule/', MQTTScheduleAPI.as_view(), name='mqtt-schedule'),
-    path('save-schedule/', views.save_schedule),
+    path('save-schedule/', views.save_schedule, name='save-schedule'),
 ]

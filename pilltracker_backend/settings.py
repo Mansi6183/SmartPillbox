@@ -50,7 +50,7 @@ INSTALLED_APPS = [
     'django_extensions',
 
     # Local apps
-    'pilltracker_backend.api',
+    'pilltracker_backend.api.apps.ApiConfig',
 
 ]
 
@@ -174,10 +174,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.BasicAuthentication',
     ],
 }
-RUN_MAIN = os.environ.get('RUN_MAIN')
 
-if RUN_MAIN != 'true':
-    APSCHEDULER_RUN = False
 # -------------------------------------------------------------------
 # CELERY CONFIGURATION (disabled for Render free plan)
 # -------------------------------------------------------------------

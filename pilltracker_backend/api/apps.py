@@ -10,6 +10,7 @@ class ApiConfig(AppConfig):
 
     def ready(self):
 
+        # Prevent duplicate scheduler
         if os.environ.get('RUN_MAIN') != 'true':
             return
 
