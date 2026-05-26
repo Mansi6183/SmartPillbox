@@ -443,23 +443,75 @@ class AlertViewSet(viewsets.ModelViewSet):
 
 class MedicationViewSet(viewsets.ModelViewSet):
 
-    queryset = Medication.objects.all()
-
     serializer_class = MedicationSerializer
-
     permission_classes = [AllowAny]
 
+    # =========================================
+    # RETURN ONLY LATEST SCHEDULE
+    # =========================================
+    def get_queryset(self):
+
+        patient_id = self.request.GET.get("patient")
+
+        queryset = Medication.objects.all().order_by('-created_at')
+
+        # OPTIONAL FILTER
+        if patient_id:
+            queryset = queryset.filter(patient_id=patient_id)
+
+        # RETURN ONLY LATEST ENTRY
+        return queryset[:1]
+
+    # =========================================
+    # SAVE + MQTT
+    # =========================================
     def perform_create(self, serializer):
 
-        patient_id = self.request.data.get('patientId')
+        obj = serializer.save()
 
-        if patient_id:
+        try:
 
-            serializer.save(patient_id=patient_id)
+            # FRONTEND TIME FORMAT = 17:00:00
+            time_str = str(obj.time)
 
-        else:
+            hour, minute, _ = map(
+                int,
+                time_str.split(":")
+            )
 
-            serializer.save()
+            payload = {
+
+                "hour": hour,
+
+                "minute": minute,
+
+                "motor": int(obj.compartment),
+
+                "dose": int(obj.dosage)
+                if str(obj.dosage).isdigit()
+                else 1
+            }
+
+            client = mqtt.Client()
+
+            client.connect(
+                "broker.hivemq.com",
+                1883,
+                60
+            )
+
+            client.publish(
+                "pillbox/schedule",
+                json.dumps(payload)
+            )
+
+            client.disconnect()
+
+            print("🔥 MQTT SENT:", payload)
+
+        except Exception as e:
+
+            print("❌ MQTT ERROR:", str(e))
 
 
 # =========================================================
@@ -549,3 +601,6 @@ class VoiceAgentAPI(APIView):
         return Response({
             "fulfillmentText": "Voice API working"
         })
+
+Updated latest medication API
+Commit changes
