@@ -602,5 +602,4 @@ class VoiceAgentAPI(APIView):
             "fulfillmentText": "Voice API working"
         })
 
-Updated latest medication API
-Commit changes
+
