@@ -440,10 +440,12 @@ class AlertViewSet(viewsets.ModelViewSet):
 
         return super().list(request, *args, **kwargs)
 
-
 class MedicationViewSet(viewsets.ModelViewSet):
 
+    queryset = Medication.objects.all()
+
     serializer_class = MedicationSerializer
+
     permission_classes = [AllowAny]
 
     # =========================================
@@ -512,8 +514,6 @@ class MedicationViewSet(viewsets.ModelViewSet):
         except Exception as e:
 
             print("❌ MQTT ERROR:", str(e))
-
-
 # =========================================================
 # PATIENT DELETE API
 # =========================================================
