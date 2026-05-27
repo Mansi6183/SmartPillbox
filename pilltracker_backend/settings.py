@@ -51,7 +51,7 @@ INSTALLED_APPS = [
     'django_extensions',
 
     # Local apps
-    'api.apps.ApiConfig',
+    'pilltracker_backend.api.apps.ApiConfig',
 ]
 
 # -------------------------------------------------------------------
