@@ -106,10 +106,14 @@ WSGI_APPLICATION = 'pilltracker_backend.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-        'OPTIONS': {'timeout': 20},
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'smartpillbox_db_3d8a',
+        'USER': '<new_user>',
+        'PASSWORD': '<new_password>',
+        'HOST': '<host>',
+        'PORT': '5432',
     }
+
 }
 
 # -------------------------------------------------------------------
