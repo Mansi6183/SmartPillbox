@@ -427,7 +427,6 @@ class PillBoxStatusViewSet(viewsets.ModelViewSet):
 
     serializer_class = PillBoxStatusSerializer
 
-
 class AlertViewSet(viewsets.ModelViewSet):
 
     queryset = Alert.objects.all().order_by('-created_at')
@@ -443,13 +442,11 @@ class AlertViewSet(viewsets.ModelViewSet):
  class MedicationViewSet(viewsets.ModelViewSet):
 
     queryset = Medication.objects.all()
-
     serializer_class = MedicationSerializer
-
     permission_classes = [AllowAny]
 
     # =========================================
-    # RETURN NEXT MEDICATION ACCORDING TO RTC TIME
+    # RETURN CURRENT/NEXT MEDICATION
     # =========================================
     def get_queryset(self):
 
@@ -459,16 +456,16 @@ class AlertViewSet(viewsets.ModelViewSet):
 
         queryset = Medication.objects.all()
 
-        # Optional patient filter
+        # OPTIONAL PATIENT FILTER
         if patient_id:
             queryset = queryset.filter(patient_id=patient_id)
 
-        # Get next medicine after current time
+        # GET NEXT MEDICINE ACCORDING TO RTC TIME
         medication = queryset.filter(
             time__gte=now
         ).order_by('time')[:1]
 
-        # If all times passed, return first medicine of next cycle
+        # IF ALL TIMES PASSED -> RETURN FIRST OF NEXT DAY
         if not medication.exists():
 
             medication = queryset.order_by('time')[:1]
@@ -494,11 +491,8 @@ class AlertViewSet(viewsets.ModelViewSet):
             payload = {
 
                 "hour": hour,
-
                 "minute": minute,
-
                 "motor": int(obj.compartment),
-
                 "dose": int(obj.dosage)
                 if str(obj.dosage).isdigit()
                 else 1
