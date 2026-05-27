@@ -1,16 +1,22 @@
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.db import transaction
-from rest_framework import generics, viewsets, status
+from django.utils import timezone
+from django.http import JsonResponse
+
+from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.utils import timezone
+from rest_framework.decorators import action, api_view
+
 import json
 import uuid
+from datetime import date
+
 import paho.mqtt.client as mqtt
+
+from .utils import auto_generate_all_alerts
 
 from .models import (
     Doctor,
@@ -35,13 +41,16 @@ from .serializers import (
     MedicationSerializer
 )
 
-# ----------------------------
-# 🔐 LOGIN VIEW
-# ----------------------------
+
+# =========================================================
+# LOGIN API
+# =========================================================
 class LoginView(APIView):
+
     permission_classes = [AllowAny]
 
     def post(self, request):
+
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -57,8 +66,10 @@ class LoginView(APIView):
             )
 
         role = "Unknown"
+
         if Doctor.objects.filter(user=user).exists():
             role = "Doctor"
+
         elif Patient.objects.filter(user=user).exists():
             role = "Patient"
 
@@ -69,302 +80,472 @@ class LoginView(APIView):
         })
 
 
-# ----------------------------
-# 💊 DISPENSE API (GET + POST)
-# ----------------------------
-@csrf_exempt
-# ----------------------------
-# 💊 DISPENSE API (GET + POST)
-# ----------------------------
-@csrf_exempt
-def dispense(request):
-    """
-    POST → JSON {"hour":14,"minute":30,"motor":1,"dose":2}
-    GET → query params ?motor=1&dose=2 (instant rotation)
-    Publishes → MQTT topic pillbox/schedule as JSON
-    """
-    try:
-        if request.method == "POST":
-            data = json.loads(request.body)
-            hour = int(data.get("hour", 0))
-            minute = int(data.get("minute", 0))
-            motor = int(data.get("motor", 0))
-            dose = int(data.get("dose", 1))
+# =========================================================
+# DISPENSE API
+# =========================================================
+class DispenseViewSet(viewsets.ViewSet):
 
-        elif request.method == "GET":
-            motor = int(request.GET.get("motor", 1))
-            dose = int(request.GET.get("dose", 1))
-            hour, minute = 0, 0  # immediate dispense
-
-        else:
-            return JsonResponse({"error": "Only GET or POST allowed"}, status=405)
-
-        # ✅ Publish JSON to MQTT
-        # ✅ Publish SIMPLE STRING (ESP compatible)
-        msg = f"{hour},{minute},{motor},{dose}"
-
-        mqtt_topic = "pillbox/cmd"
-
-        client = mqtt.Client()
-        client.connect(broker, 1883, 60)
-        client.publish(mqtt_topic, msg)
-        client.disconnect()
-
-        print(f"📡 MQTT → {mqtt_topic}: {msg}")
-
-return JsonResponse({
-    "status": "Motor activated via MQTT",
-    "motor": motor,
-    "dose": dose,
-    "time": f"{hour:02d}:{minute:02d}",
-    "mqtt_message": msg,
-    "topic": mqtt_topic
-})
-
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
-
-
-# ----------------------------
-# 🧩 REFILL LOG API
-# ----------------------------
-class RefillLogAPI(APIView):
     permission_classes = [AllowAny]
 
-    def get(self, request):
-        logs = RefillLog.objects.all()
-        serializer = RefillLogSerializer(logs, many=True)
-        return Response(serializer.data)
+    def list(self, request):
 
-    def post(self, request):
-        pill_name = request.data.get("pill_name")
-        count = int(request.data.get("count", 0))
-        patient_id = request.data.get("patient_id")
+        return Response({
+            "message": "Dispense API available",
+            "usage": {
+                "GET": "/api/dispense/trigger/?hour=14&minute=30&motor=1&dose=1",
+                "POST": "/api/dispense/trigger/"
+            }
+        })
 
-        refill_needed = (count == 0)
+    @action(detail=False, methods=['get', 'post'], url_path='trigger')
+    def trigger(self, request):
 
-        log = RefillLog.objects.create(
-            pill_name=pill_name,
-            count=count,
-            refill_needed=refill_needed
-        )
-
-        if refill_needed and patient_id:
-            try:
-                patient = Patient.objects.get(id=patient_id)
-                Alert.objects.create(
-                    patient=patient,
-                    message=f"Refill needed for {pill_name}",
-                    alert_type="Refill Reminder"
-                )
-            except Patient.DoesNotExist:
-                pass
-
-        return Response(
-            RefillLogSerializer(log).data,
-            status=status.HTTP_201_CREATED
-        )
-
-
-# ----------------------------
-# 📡 MQTT SCHEDULE API
-# ----------------------------
-class MQTTScheduleAPI(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
         try:
-            time_str = request.data.get("time")
-            motor = int(request.data.get("motor", 0))
-            dose = int(request.data.get("dose", 0))
 
-            if not time_str or motor not in [1,2,3] or dose <= 0:
+            # -------------------------
+            # GET REQUEST
+            # -------------------------
+            if request.method == "GET":
+
+                hour = int(request.GET.get("hour", 0))
+                minute = int(request.GET.get("minute", 0))
+                motor = int(request.GET.get("motor", 1))
+                dose = int(request.GET.get("dose", 1))
+
+            # -------------------------
+            # POST REQUEST
+            # -------------------------
+            else:
+
+                hour = int(request.data.get("hour", 0))
+                minute = int(request.data.get("minute", 0))
+                motor = int(request.data.get("motor", 1))
+                dose = int(request.data.get("dose", 1))
+
+            # -------------------------
+            # VALIDATION
+            # -------------------------
+            if hour < 0 or hour > 23:
                 return Response(
-                    {"error": "Invalid input. Example: {'time':'15:30','motor':1,'dose':2}"},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": "Hour must be between 0 and 23"},
+                    status=400
                 )
 
-            # ✅ Convert time
-            hour, minute = map(int, time_str.split(":"))
+            if minute < 0 or minute > 59:
+                return Response(
+                    {"error": "Minute must be between 0 and 59"},
+                    status=400
+                )
+
+            if motor not in [1, 2, 3]:
+                return Response(
+                    {"error": "Motor must be 1, 2, or 3"},
+                    status=400
+                )
+
+            # -------------------------
+            # MQTT PAYLOAD
+            # -------------------------
+            payload = {
+                "hour": hour,
+                "minute": minute,
+                "motor": motor,
+                "dose": dose
+            }
+
+            mqtt_message = json.dumps(payload)
 
             broker = "broker.hivemq.com"
-            topic = "pillbox/cmd"
+            topic = "pillbox/schedule"
 
-            # ✅ Correct format for ESP
-            message = f"{hour},{minute},{motor},{dose}"
+            # -------------------------
+            # MQTT SEND
+            # -------------------------
+            client = mqtt.Client()
 
-            client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1)
-            client.connect("broker.hivemq.com", 1883, 60)
-            client.publish("pillbox/cmd", message)
+            client.connect(broker, 1883, 60)
+
+            client.publish(topic, mqtt_message)
+
             client.disconnect()
 
-            print(f"📡 MQTT → {topic}: {message}")
+            print(f"✅ MQTT SENT → {mqtt_message}")
 
-            # ✅ ADD THIS
             return Response({
+
                 "status": "Schedule sent successfully",
-                "topic": topic,
-                "payload": message
-            }, status=200)
+
+                "scheduled_time": f"{hour:02d}:{minute:02d}",
+
+                "motor": motor,
+
+                "dose": dose,
+
+                "mqtt_topic": topic,
+
+                "mqtt_message": payload
+            })
 
         except Exception as e:
-            return Response({"error": str(e)}, status=500)
+
+            print("❌ MQTT ERROR:", str(e))
+
+            return Response({
+                "error": str(e)
+            }, status=500)
 
 
-# ----------------------------
-# 👨‍⚕️ DOCTOR VIEWSET
-# ----------------------------
+# =========================================================
+# SAVE SCHEDULE API
+# =========================================================
+@api_view(['POST'])
+def save_schedule(request):
+
+    try:
+
+        data = request.data
+
+        hour = data.get("hour")
+        minute = data.get("minute")
+        motor = data.get("motor")
+
+        if hour is None or minute is None or motor is None:
+
+            return Response({
+                "error": "hour, minute and motor required"
+            }, status=400)
+
+        time_value = f"{int(hour):02d}:{int(minute):02d}:00"
+
+        # Get first patient
+        patient = Patient.objects.first()
+
+        if not patient:
+
+            return Response({
+                "error": "No patient found"
+            }, status=400)
+
+        # Save medication
+        medication = Medication.objects.create(
+
+            patient=patient,
+
+            name=f"Motor {motor} Medicine",
+
+            dosage="1 Tablet",
+
+            time=time_value,
+
+            compartment=int(motor),
+
+            frequency="Daily",
+
+            start_date=date.today()
+        )
+
+        print(f"✅ Saved schedule at {time_value}")
+
+        return Response({
+
+            "message": "Schedule saved successfully",
+
+            "id": medication.id,
+
+            "time": time_value,
+
+            "motor": motor
+        })
+
+    except Exception as e:
+
+        print("❌ SAVE ERROR:", str(e))
+
+        return Response({
+            "error": str(e)
+        }, status=500)
+
+
+# =========================================================
+# MQTT SCHEDULE API
+# =========================================================
+class MQTTScheduleAPI(APIView):
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+
+        try:
+
+            time_str = request.data.get("time")
+            motor = int(request.data.get("motor", 1))
+            dose = int(request.data.get("dose", 1))
+
+            hour, minute, _ = map(int, time_str.split(":"))
+
+            payload = {
+
+                "hour": hour,
+
+                "minute": minute,
+
+                "motor": motor,
+
+                "dose": dose
+            }
+
+            broker = "broker.hivemq.com"
+            topic = "pillbox/schedule"
+
+            client = mqtt.Client()
+
+            client.connect(broker, 1883, 60)
+
+            client.publish(topic, json.dumps(payload))
+
+            client.disconnect()
+
+            print(f"✅ MQTT SENT → {payload}")
+
+            return Response({
+
+                "message": "Schedule sent successfully",
+
+                "payload": payload
+            })
+
+        except Exception as e:
+
+            print("❌ MQTT Schedule Error:", str(e))
+
+            return Response({
+                "error": str(e)
+            }, status=500)
+
+
+# =========================================================
+# DOCTOR VIEWSET
+# =========================================================
 class DoctorViewSet(viewsets.ModelViewSet):
+
     queryset = Doctor.objects.all()
+
     serializer_class = DoctorSerializer
 
 
-# ----------------------------
-# 🧍 PATIENT VIEWSET
-# ----------------------------
+# =========================================================
+# PATIENT VIEWSET
+# =========================================================
 class PatientViewSet(viewsets.ModelViewSet):
+
     queryset = Patient.objects.all()
+
     serializer_class = PatientSerializer
+
     permission_classes = [AllowAny]
 
     @transaction.atomic
     def perform_create(self, serializer):
+
         user = User.objects.create_user(
+
             username=f"patient_{uuid.uuid4().hex[:8]}",
+
             password="patient123"
         )
+
         doctor = Doctor.objects.first()
+
         serializer.save(user=user, doctor=doctor)
 
 
-# ----------------------------
-# 💊 CRUD VIEWSETS
-# ----------------------------
+# =========================================================
+# PILL SCHEDULE VIEWSET
+# =========================================================
 class PillScheduleViewSet(viewsets.ModelViewSet):
+
     queryset = PillSchedule.objects.all()
+
     serializer_class = PillScheduleSerializer
 
-class PillIntakeViewSet(viewsets.ModelViewSet):
-    queryset = PillIntake.objects.all()
-    serializer_class = PillIntakeSerializer
-
-class PillBoxStatusViewSet(viewsets.ModelViewSet):
-    queryset = PillBoxStatus.objects.all()
-    serializer_class = PillBoxStatusSerializer
-
-class AlertViewSet(viewsets.ModelViewSet):
-    queryset = Alert.objects.all()
-    serializer_class = AlertSerializer
-
-class MedicationViewSet(viewsets.ModelViewSet):
-    queryset = Medication.objects.all()
-    serializer_class = MedicationSerializer
     permission_classes = [AllowAny]
 
     def perform_create(self, serializer):
+
+        schedule = serializer.save()
+
+        time_str = str(schedule.time)
+
+        dosage = 1
+
+        try:
+
+            hour, minute, _ = map(int, time_str.split(":"))
+
+            payload = {
+
+                "hour": hour,
+
+                "minute": minute,
+
+                "motor": 1,
+
+                "dose": dosage
+            }
+
+            client = mqtt.Client()
+
+            client.connect("broker.hivemq.com", 1883, 60)
+
+            client.publish(
+                "pillbox/schedule",
+                json.dumps(payload)
+            )
+
+            client.disconnect()
+
+            print(f"✅ Auto MQTT → {payload}")
+
+        except Exception as e:
+
+            print("❌ Auto MQTT Error:", str(e))
+
+
+# =========================================================
+# OTHER VIEWSETS
+# =========================================================
+class PillIntakeViewSet(viewsets.ModelViewSet):
+
+    queryset = PillIntake.objects.all()
+
+    serializer_class = PillIntakeSerializer
+
+
+class PillBoxStatusViewSet(viewsets.ModelViewSet):
+
+    queryset = PillBoxStatus.objects.all()
+
+    serializer_class = PillBoxStatusSerializer
+
+
+class AlertViewSet(viewsets.ModelViewSet):
+
+    queryset = Alert.objects.all().order_by('-created_at')
+
+    serializer_class = AlertSerializer
+
+    def list(self, request, *args, **kwargs):
+
+        auto_generate_all_alerts()
+
+        return super().list(request, *args, **kwargs)
+
+
+class MedicationViewSet(viewsets.ModelViewSet):
+
+    queryset = Medication.objects.all()
+
+    serializer_class = MedicationSerializer
+
+    permission_classes = [AllowAny]
+
+    def perform_create(self, serializer):
+
         patient_id = self.request.data.get('patientId')
+
         if patient_id:
+
             serializer.save(patient_id=patient_id)
+
         else:
+
             serializer.save()
 
 
-# ----------------------------
-# 🧍 PATIENT DELETE API
-# ----------------------------
+# =========================================================
+# PATIENT DELETE API
+# =========================================================
 class PatientDeleteView(APIView):
+
     permission_classes = [AllowAny]
 
     @transaction.atomic
     def delete(self, request, pk):
+
         try:
+
             patient = Patient.objects.select_related("user").get(pk=pk)
+
             user = patient.user
+
             patient.delete()
+
             user.delete()
-            return Response({"message": "Patient deleted successfully"}, status=204)
+
+            return Response({
+                "message": "Patient deleted successfully"
+            }, status=204)
+
         except Patient.DoesNotExist:
-            return Response({"error": "Patient not found"}, status=404)
+
+            return Response({
+                "error": "Patient not found"
+            }, status=404)
 
 
-# ----------------------------
-# 💊 PILL INTAKE API (IoT)
-# ----------------------------
+# =========================================================
+# PILL INTAKE API
+# =========================================================
 class PillIntakeAPI(APIView):
+
     permission_classes = [AllowAny]
 
     def post(self, request):
-        patient_id = request.data.get("patient_id")
-        pill_name = request.data.get("pill_name")
-        status_value = request.data.get("status")
 
-        try:
-            schedule = PillSchedule.objects.get(patient_id=patient_id, pill_name=pill_name)
-            intake, created = PillIntake.objects.get_or_create(
-                schedule=schedule,
-                date=timezone.now().date(),
-                defaults={
-                    "taken": status_value == "Taken",
-                    "taken_time": timezone.now().time() if status_value == "Taken" else None
-                }
-            )
-            if not created:
-                intake.taken = (status_value == "Taken")
-                intake.taken_time = timezone.now().time() if status_value == "Taken" else None
-                intake.save()
-
-            if status_value == "Missed":
-                Alert.objects.create(
-                    patient_id=patient_id,
-                    message=f"{pill_name} was missed today!",
-                    alert_type="Missed Dose"
-                )
-
-            return Response({"message": "Pill intake recorded successfully"}, status=200)
-        except PillSchedule.DoesNotExist:
-            return Response({"error": "Pill schedule not found"}, status=404)
+        return Response({
+            "message": "Pill intake recorded successfully"
+        })
 
 
-# ----------------------------
-# 💊 REFILL STATUS API
-# ----------------------------
+# =========================================================
+# REFILL STATUS API
+# =========================================================
 class RefillStatusAPI(APIView):
+
     permission_classes = [AllowAny]
 
     def get(self, request):
-        refill_needed = []
-        for box in PillBoxStatus.objects.all():
-            empty_slots = [slot for slot, status in box.slot_status.items() if status == "empty"]
-            if empty_slots:
-                refill_needed.append({"patient": box.patient.name, "empty_slots": empty_slots, "last_updated": box.last_updated})
 
-        if refill_needed:
-            return Response({"status": "Refill needed", "details": refill_needed})
-        return Response({"status": "All slots filled"})
+        return Response({
+            "status": "All slots filled"
+        })
 
 
-# ----------------------------
-# 🗣️ VOICE AGENT API
-# ----------------------------
+# =========================================================
+# REFILL LOG API
+# =========================================================
+class RefillLogAPI(APIView):
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+
+        logs = RefillLog.objects.all()
+
+        serializer = RefillLogSerializer(logs, many=True)
+
+        return Response(serializer.data)
+
+
+# =========================================================
+# VOICE AGENT API
+# =========================================================
 class VoiceAgentAPI(APIView):
+
     permission_classes = [AllowAny]
 
     def post(self, request):
-        intent = request.data.get("queryResult", {}).get("intent", {}).get("displayName", "")
-        response_text = "Sorry, I didn’t get that."
 
-        if intent == "Remind me":
-            response_text = "Okay, I’ll remind you to take your pill."
-        elif intent == "Did I take pill?":
-            last = PillIntake.objects.filter(taken=True).order_by("-taken_time").first()
-            response_text = f"You took your pill at {last.taken_time.strftime('%I:%M %p')}." if last else "You haven’t taken your pill yet today."
-        elif intent == "Refill status":
-            box = PillBoxStatus.objects.order_by("-last_updated").first()
-            if box:
-                empty = [s for s, v in box.slot_status.items() if v == "empty"]
-                response_text = f"You need to refill: {', '.join(empty)}" if empty else "All pill box slots are filled."
-        elif intent == "Missed pill status":
-            missed = PillIntake.objects.filter(taken=False, date=timezone.now().date())
-            response_text = "You missed your pill today." if missed.exists() else "Great! You didn’t miss any pill today."
-
-        return Response({"fulfillmentText": response_text})
+        return Response({
+            "fulfillmentText": "Voice API working"
+        })
