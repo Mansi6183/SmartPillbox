@@ -440,7 +440,7 @@ class AlertViewSet(viewsets.ModelViewSet):
 
         return super().list(request, *args, **kwargs)
 
-class MedicationViewSet(viewsets.ModelViewSet):
+ class MedicationViewSet(viewsets.ModelViewSet):
 
     queryset = Medication.objects.all()
 
@@ -449,36 +449,31 @@ class MedicationViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     # =========================================
-    # RETURN ONLY LATEST SCHEDULE
+    # RETURN NEXT MEDICATION ACCORDING TO RTC TIME
     # =========================================
-   def get_queryset(self):
+    def get_queryset(self):
 
-    from django.utils import timezone
+        now = timezone.localtime().time()
 
-    now = timezone.localtime().time()
+        patient_id = self.request.GET.get("patient")
 
-    patient_id = self.request.GET.get("patient")
+        queryset = Medication.objects.all()
 
-    # Get medicines whose time is >= current time
-    queryset = Medication.objects.filter(
-        time__gte=now
-    ).order_by('time')
-
-    # Optional patient filter
-    if patient_id:
-        queryset = queryset.filter(patient_id=patient_id)
-
-    # If all today's medicines are over,
-    # start again from earliest medicine
-    if not queryset.exists():
-
-        queryset = Medication.objects.all().order_by('time')
-
+        # Optional patient filter
         if patient_id:
             queryset = queryset.filter(patient_id=patient_id)
 
-    # Return ONLY next/current medicine
-    return queryset[:1]
+        # Get next medicine after current time
+        medication = queryset.filter(
+            time__gte=now
+        ).order_by('time')[:1]
+
+        # If all times passed, return first medicine of next cycle
+        if not medication.exists():
+
+            medication = queryset.order_by('time')[:1]
+
+        return medication
 
     # =========================================
     # SAVE + MQTT
@@ -489,7 +484,6 @@ class MedicationViewSet(viewsets.ModelViewSet):
 
         try:
 
-            # FRONTEND TIME FORMAT = 17:00:00
             time_str = str(obj.time)
 
             hour, minute, _ = map(
