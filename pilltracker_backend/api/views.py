@@ -451,18 +451,34 @@ class MedicationViewSet(viewsets.ModelViewSet):
     # =========================================
     # RETURN ONLY LATEST SCHEDULE
     # =========================================
-    def get_queryset(self):
+   def get_queryset(self):
 
-        patient_id = self.request.GET.get("patient")
+    from django.utils import timezone
 
-        queryset = Medication.objects.all().order_by('-created_at')
+    now = timezone.localtime().time()
 
-        # OPTIONAL FILTER
+    patient_id = self.request.GET.get("patient")
+
+    # Get medicines whose time is >= current time
+    queryset = Medication.objects.filter(
+        time__gte=now
+    ).order_by('time')
+
+    # Optional patient filter
+    if patient_id:
+        queryset = queryset.filter(patient_id=patient_id)
+
+    # If all today's medicines are over,
+    # start again from earliest medicine
+    if not queryset.exists():
+
+        queryset = Medication.objects.all().order_by('time')
+
         if patient_id:
             queryset = queryset.filter(patient_id=patient_id)
 
-        # RETURN ONLY LATEST ENTRY
-        return queryset[:1]
+    # Return ONLY next/current medicine
+    return queryset[:1]
 
     # =========================================
     # SAVE + MQTT
