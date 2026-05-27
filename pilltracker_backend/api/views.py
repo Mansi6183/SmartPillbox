@@ -2,7 +2,6 @@ from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.db import transaction
 from django.utils import timezone
-from django.http import JsonResponse
 
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
@@ -90,11 +89,7 @@ class DispenseViewSet(viewsets.ViewSet):
     def list(self, request):
 
         return Response({
-            "message": "Dispense API available",
-            "usage": {
-                "GET": "/api/dispense/trigger/?hour=14&minute=30&motor=1&dose=1",
-                "POST": "/api/dispense/trigger/"
-            }
+            "message": "Dispense API available"
         })
 
     @action(detail=False, methods=['get', 'post'], url_path='trigger')
@@ -102,9 +97,6 @@ class DispenseViewSet(viewsets.ViewSet):
 
         try:
 
-            # -------------------------
-            # GET REQUEST
-            # -------------------------
             if request.method == "GET":
 
                 hour = int(request.GET.get("hour", 0))
@@ -112,9 +104,6 @@ class DispenseViewSet(viewsets.ViewSet):
                 motor = int(request.GET.get("motor", 1))
                 dose = int(request.GET.get("dose", 1))
 
-            # -------------------------
-            # POST REQUEST
-            # -------------------------
             else:
 
                 hour = int(request.data.get("hour", 0))
@@ -122,30 +111,6 @@ class DispenseViewSet(viewsets.ViewSet):
                 motor = int(request.data.get("motor", 1))
                 dose = int(request.data.get("dose", 1))
 
-            # -------------------------
-            # VALIDATION
-            # -------------------------
-            if hour < 0 or hour > 23:
-                return Response(
-                    {"error": "Hour must be between 0 and 23"},
-                    status=400
-                )
-
-            if minute < 0 or minute > 59:
-                return Response(
-                    {"error": "Minute must be between 0 and 59"},
-                    status=400
-                )
-
-            if motor not in [1, 2, 3]:
-                return Response(
-                    {"error": "Motor must be 1, 2, or 3"},
-                    status=400
-                )
-
-            # -------------------------
-            # MQTT PAYLOAD
-            # -------------------------
             payload = {
                 "hour": hour,
                 "minute": minute,
@@ -153,37 +118,26 @@ class DispenseViewSet(viewsets.ViewSet):
                 "dose": dose
             }
 
-            mqtt_message = json.dumps(payload)
-
-            broker = "broker.hivemq.com"
-            topic = "pillbox/schedule"
-
-            # -------------------------
-            # MQTT SEND
-            # -------------------------
             client = mqtt.Client()
 
-            client.connect(broker, 1883, 60)
+            client.connect(
+                "broker.hivemq.com",
+                1883,
+                60
+            )
 
-            client.publish(topic, mqtt_message)
+            client.publish(
+                "pillbox/schedule",
+                json.dumps(payload)
+            )
 
             client.disconnect()
 
-            print(f"✅ MQTT SENT → {mqtt_message}")
+            print("✅ MQTT SENT:", payload)
 
             return Response({
-
-                "status": "Schedule sent successfully",
-
-                "scheduled_time": f"{hour:02d}:{minute:02d}",
-
-                "motor": motor,
-
-                "dose": dose,
-
-                "mqtt_topic": topic,
-
-                "mqtt_message": payload
+                "status": "success",
+                "payload": payload
             })
 
         except Exception as e:
@@ -217,7 +171,6 @@ def save_schedule(request):
 
         time_value = f"{int(hour):02d}:{int(minute):02d}:00"
 
-        # Get first patient
         patient = Patient.objects.first()
 
         if not patient:
@@ -226,14 +179,13 @@ def save_schedule(request):
                 "error": "No patient found"
             }, status=400)
 
-        # Save medication
         medication = Medication.objects.create(
 
             patient=patient,
 
             name=f"Motor {motor} Medicine",
 
-            dosage="1 Tablet",
+            dosage="1",
 
             time=time_value,
 
@@ -244,7 +196,7 @@ def save_schedule(request):
             start_date=date.today()
         )
 
-        print(f"✅ Saved schedule at {time_value}")
+        print(f"✅ Schedule Saved: {time_value}")
 
         return Response({
 
@@ -278,10 +230,15 @@ class MQTTScheduleAPI(APIView):
         try:
 
             time_str = request.data.get("time")
+
             motor = int(request.data.get("motor", 1))
+
             dose = int(request.data.get("dose", 1))
 
-            hour, minute, _ = map(int, time_str.split(":"))
+            hour, minute, _ = map(
+                int,
+                time_str.split(":")
+            )
 
             payload = {
 
@@ -294,29 +251,31 @@ class MQTTScheduleAPI(APIView):
                 "dose": dose
             }
 
-            broker = "broker.hivemq.com"
-            topic = "pillbox/schedule"
-
             client = mqtt.Client()
 
-            client.connect(broker, 1883, 60)
+            client.connect(
+                "broker.hivemq.com",
+                1883,
+                60
+            )
 
-            client.publish(topic, json.dumps(payload))
+            client.publish(
+                "pillbox/schedule",
+                json.dumps(payload)
+            )
 
             client.disconnect()
 
-            print(f"✅ MQTT SENT → {payload}")
+            print("✅ MQTT SENT:", payload)
 
             return Response({
-
                 "message": "Schedule sent successfully",
-
                 "payload": payload
             })
 
         except Exception as e:
 
-            print("❌ MQTT Schedule Error:", str(e))
+            print("❌ MQTT ERROR:", str(e))
 
             return Response({
                 "error": str(e)
@@ -356,7 +315,10 @@ class PatientViewSet(viewsets.ModelViewSet):
 
         doctor = Doctor.objects.first()
 
-        serializer.save(user=user, doctor=doctor)
+        serializer.save(
+            user=user,
+            doctor=doctor
+        )
 
 
 # =========================================================
@@ -370,49 +332,9 @@ class PillScheduleViewSet(viewsets.ModelViewSet):
 
     permission_classes = [AllowAny]
 
-    def perform_create(self, serializer):
-
-        schedule = serializer.save()
-
-        time_str = str(schedule.time)
-
-        dosage = 1
-
-        try:
-
-            hour, minute, _ = map(int, time_str.split(":"))
-
-            payload = {
-
-                "hour": hour,
-
-                "minute": minute,
-
-                "motor": 1,
-
-                "dose": dosage
-            }
-
-            client = mqtt.Client()
-
-            client.connect("broker.hivemq.com", 1883, 60)
-
-            client.publish(
-                "pillbox/schedule",
-                json.dumps(payload)
-            )
-
-            client.disconnect()
-
-            print(f"✅ Auto MQTT → {payload}")
-
-        except Exception as e:
-
-            print("❌ Auto MQTT Error:", str(e))
-
 
 # =========================================================
-# OTHER VIEWSETS
+# PILL INTAKE VIEWSET
 # =========================================================
 class PillIntakeViewSet(viewsets.ModelViewSet):
 
@@ -421,12 +343,19 @@ class PillIntakeViewSet(viewsets.ModelViewSet):
     serializer_class = PillIntakeSerializer
 
 
+# =========================================================
+# PILL BOX STATUS VIEWSET
+# =========================================================
 class PillBoxStatusViewSet(viewsets.ModelViewSet):
 
     queryset = PillBoxStatus.objects.all()
 
     serializer_class = PillBoxStatusSerializer
 
+
+# =========================================================
+# ALERT VIEWSET
+# =========================================================
 class AlertViewSet(viewsets.ModelViewSet):
 
     queryset = Alert.objects.all().order_by('-created_at')
@@ -439,10 +368,16 @@ class AlertViewSet(viewsets.ModelViewSet):
 
         return super().list(request, *args, **kwargs)
 
- class MedicationViewSet(viewsets.ModelViewSet):
+
+# =========================================================
+# MEDICATION VIEWSET
+# =========================================================
+class MedicationViewSet(viewsets.ModelViewSet):
 
     queryset = Medication.objects.all()
+
     serializer_class = MedicationSerializer
+
     permission_classes = [AllowAny]
 
     # =========================================
@@ -460,12 +395,13 @@ class AlertViewSet(viewsets.ModelViewSet):
         if patient_id:
             queryset = queryset.filter(patient_id=patient_id)
 
-        # GET NEXT MEDICINE ACCORDING TO RTC TIME
+        # GET CURRENT/NEXT MEDICINE
         medication = queryset.filter(
             time__gte=now
         ).order_by('time')[:1]
 
-        # IF ALL TIMES PASSED -> RETURN FIRST OF NEXT DAY
+        # IF ALL TIMES PASSED
+        # RETURN FIRST MEDICINE OF NEXT CYCLE
         if not medication.exists():
 
             medication = queryset.order_by('time')[:1]
@@ -491,8 +427,11 @@ class AlertViewSet(viewsets.ModelViewSet):
             payload = {
 
                 "hour": hour,
+
                 "minute": minute,
+
                 "motor": int(obj.compartment),
+
                 "dose": int(obj.dosage)
                 if str(obj.dosage).isdigit()
                 else 1
@@ -518,6 +457,8 @@ class AlertViewSet(viewsets.ModelViewSet):
         except Exception as e:
 
             print("❌ MQTT ERROR:", str(e))
+
+
 # =========================================================
 # PATIENT DELETE API
 # =========================================================
@@ -588,7 +529,10 @@ class RefillLogAPI(APIView):
 
         logs = RefillLog.objects.all()
 
-        serializer = RefillLogSerializer(logs, many=True)
+        serializer = RefillLogSerializer(
+            logs,
+            many=True
+        )
 
         return Response(serializer.data)
 
@@ -605,5 +549,3 @@ class VoiceAgentAPI(APIView):
         return Response({
             "fulfillmentText": "Voice API working"
         })
-
-
